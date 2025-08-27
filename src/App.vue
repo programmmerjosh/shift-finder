@@ -324,36 +324,34 @@ function submit() {
     const win = currentPhaseWindow(shift.value, q);          // current 4-day phase window (on/off)
     const neighbors = neighborWorkWindows(shift.value, q);   // nearest prev/next work windows
 
-    // If working today, show this work block’s exact times and surrounding OFF windows.
-    // If OFF today, "block window" shows the OFF range, and we still show prev/next work blocks.
-    let blockStartTs, blockEndTs;
-    if (state.working) {
-      if (state.type === "day") { blockStartTs = win.dayStart; blockEndTs = win.dayEnd; }
-      else { blockStartTs = win.nightStart; blockEndTs = win.nightEnd; }
-    } else {
-      // OFF phase: use calendar day range for the 4-day OFF block (00:00..00:00)
-      blockStartTs = win.start;
-      blockEndTs = addDays(win.start, 4);
-    }
+// Always show a WORK block (with real shift times) in the "Block window"
+let blockStartTs, blockEndTs, blockPhase;
+if (state.working) {
+  // use the current work block (day or night)
+  blockPhase = state.type; // 'day' | 'night'
+  ({ start: blockStartTs, end: blockEndTs } = workBounds(win.start, state.type));
+} else {
+  // not working: show the NEXT work block after the selected date
+  blockPhase = neighbors.nextPhase; // 'day' | 'night'
+  blockStartTs = neighbors.nextStart; // already 07:00 or 19:00
+  blockEndTs   = neighbors.nextEnd;   // already 19:00 or 07:00(+4d)
+}
 
-    // Off windows adjacent to the *relevant* work block:
-    // If working: around the *current* work block; If off: around the *next* work block (so user sees what's coming)
-    const offRefStart = state.working
-      ? (state.type === "day" ? win.start : win.start) // same start works for both phases
-      : addDays(neighbors.nextStart, - (neighbors.nextPhase === "day" ? 0 : 0)); // already the exact work start
-    const around = offWindowsAroundWork(offRefStart);
+// Off windows should be relative to the shown WORK block
+const offRefStart = state.working ? ymd(win.start) : ymd(neighbors.nextStart);
+const around = offWindowsAroundWork(offRefStart);
 
-    resultDate.value = {
-      working: state.working,
-      shiftType: state.type ?? (win.phase === "off" ? "off" : win.phase),
-      queryDate: q,
-      blockStart: blockStartTs,
-      blockEnd: blockEndTs,
-      prevOffStart: around.prevOffStart, prevOffEnd: around.prevOffEnd,
-      nextOffStart: around.nextOffStart, nextOffEnd: around.nextOffEnd,
-      prevWorkStart: neighbors.prevStart, prevWorkEnd: neighbors.prevEnd,
-      nextWorkStart: neighbors.nextStart, nextWorkEnd: neighbors.nextEnd
-    };
+resultDate.value = {
+  working: state.working,
+  shiftType: state.type ?? 'off',
+  queryDate: q,
+  blockStart: blockStartTs,
+  blockEnd: blockEndTs,
+  prevOffStart: around.prevOffStart, prevOffEnd: around.prevOffEnd,
+  nextOffStart: around.nextOffStart, nextOffEnd: around.nextOffEnd,
+  prevWorkStart: neighbors.prevStart, prevWorkEnd: neighbors.prevEnd,
+  nextWorkStart: neighbors.nextStart, nextWorkEnd: neighbors.nextEnd
+};
 
 } else {
   // Month mode → compute 4-day WORK blocks (DAY/NIGHT) that intersect this month
