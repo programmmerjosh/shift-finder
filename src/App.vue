@@ -56,10 +56,17 @@
       <div class="kv">
         <div class="muted">{{ resultDate.blockLabel }}</div>
         <div>
-          <span v-if="resultDate.blockPhase !== 'off'" class="pill yes" style="margin-right:8px">
-            {{ resultDate.blockPhase.toUpperCase() }} WORK
+          <span
+            class="pill"
+            :class="resultDate.blockPhase === 'day' ? 'day' 
+                  : resultDate.blockPhase === 'night' ? 'night' 
+                  : 'off'"
+            style="margin-right:8px"
+          >
+            <template v-if="resultDate.blockPhase==='day'">☀️ DAY WORK</template>
+            <template v-else-if="resultDate.blockPhase==='night'">🌙 NIGHT WORK</template>
+            <template v-else>🛌 OFF</template>
           </span>
-          <span v-else class="pill no" style="margin-right:8px">OFF</span>
           {{ fmtFull(resultDate.blockStart) }} → {{ fmtFull(resultDate.blockEnd) }}
         </div>
 
@@ -114,19 +121,17 @@
       </div>
 
       <div class="list">
-  <div class="block" style="flex:1 1 100%">
-    <div style="font-weight:600;margin-bottom:6px">Work blocks this month</div>
-    <div class="muted" v-if="!resultMonth || resultMonth.blocks.length===0">—</div>
-    <div v-else>
-      <div v-for="(b, i) in resultMonth.blocks" :key="i" style="margin-bottom:6px">
-        <span :class="['pill', b.phase==='day' ? 'yes' : 'no']"
-              style="margin-right:8px">
-          {{ b.phase.toUpperCase() }}
+        <div v-for="(b, i) in resultMonth.blocks" :key="i" style="margin-bottom:6px">
+        <span
+          class="pill"
+          :class="b.phase==='day' ? 'day' : 'night'"
+          style="margin-right:8px"
+        >
+          <template v-if="b.phase==='day'">☀️ DAY</template>
+          <template v-else>🌙 NIGHT</template>
         </span>
         {{ fmtFull(b.start) }} → {{ fmtFull(b.end) }}
       </div>
-    </div>
-  </div>
 </div>
 
     </div>
@@ -469,6 +474,21 @@ onMounted(() => {
     .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;font-size:12px}
     .pill.yes{background:rgba(33,193,107,.18);color:var(--green);border:1px solid rgba(33,193,107,.35)}
     .pill.no{background:rgba(255,92,92,.18);color:var(--red);border:1px solid rgba(255,92,92,.35)}
+    .pill.day {
+      background: var(--day-bg);
+      color: var(--day-fg);
+      border-color: var(--day-bd);
+    }
+    .pill.night {
+      background: var(--night-bg);
+      color: var(--night-fg);
+      border-color: var(--night-bd);
+    }
+    .pill.off {
+      background: var(--off-bg);
+      color: var(--off-fg);
+      border-color: var(--off-bd);
+    }
     .kv{display:grid;grid-template-columns:160px 1fr;gap:6px 12px;margin-top:10px}
     .kv div{padding:6px 0;border-bottom:1px dashed var(--grid)}
     .calendar{margin-top:14px;border:1px solid var(--border);border-radius:12px;overflow:hidden}
