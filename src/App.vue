@@ -1,6 +1,6 @@
 <template>
   <div class="container">
-    <h1>Shift Finder</h1>
+    <h1>Production Shift Finder</h1>
 
     <!-- Controls -->
     <div class="card" style="margin-bottom:14px">
