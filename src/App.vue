@@ -54,8 +54,14 @@
       </div>
 
       <div class="kv">
-        <div class="muted">Block window</div>
-        <div>{{ fmtFull(resultDate.blockStart) }} → {{ fmtFull(resultDate.blockEnd) }}</div>
+        <div class="muted">{{ resultDate.blockLabel }}</div>
+        <div>
+          <span v-if="resultDate.blockPhase !== 'off'" class="pill yes" style="margin-right:8px">
+            {{ resultDate.blockPhase.toUpperCase() }} WORK
+          </span>
+          <span v-else class="pill no" style="margin-right:8px">OFF</span>
+          {{ fmtFull(resultDate.blockStart) }} → {{ fmtFull(resultDate.blockEnd) }}
+        </div>
 
         <div class="muted">You’re scheduled</div>
         <div>
@@ -297,70 +303,58 @@ function offWindowsAroundWork(workStartDate) {
   return { prevOffStart, prevOffEnd, nextOffStart, nextOffEnd };
 }
 
-function neighboringBlocks(letter,anchorDate){
-  const type = shiftTypeFor(letter);
-  const wantAB = (letter==="A"||letter==="B");
-  const currWin = blockWindowForDate(anchorDate);
-  const current = (wantAB===currWin.isAB)?currWin:
-        blockWindowForDate(wantAB?addDays(anchorDate,-((dayIndexFromBase(anchorDate)%4)+4))
-                                  :addDays(anchorDate,-(dayIndexFromBase(anchorDate)%4)));
-  const prev = blockWindowForDate(addDays(current.blockStart,-8));
-  const next = blockWindowForDate(addDays(current.blockStart,8));
-  const prevOffStart = addDays(prev.blockStart,4), prevOffEnd=current.blockStart;
-  const nextOffStart = addDays(current.blockStart,4), nextOffEnd=next.blockStart;
-  const pick=(w)=>(type==="day"?{start:w.dayStart,end:w.dayEnd}:{start:w.nightStart,end:w.nightEnd});
-  return {currentStart:pick(current).start,currentEnd:pick(current).end,
-          prevStart:pick(prev).start,prevEnd:pick(prev).end,
-          nextStart:pick(next).start,nextEnd:pick(next).end,
-          prevOffStart,prevOffEnd,nextOffStart,nextOffEnd};
-}
-
 /* ========= Actions ========= */
 function submit() {
   if (mode.value === "date") {
+    // Parse the selected date at local midnight
     const q = new Date(dateInput.value + "T00:00:00");
 
-    const state = workingState(shift.value, q);              // {working, type, phase, idx}
+    const state = workingState(shift.value, q);              // { working, type, phase, idx }
     const win = currentPhaseWindow(shift.value, q);          // current 4-day phase window (on/off)
     const neighbors = neighborWorkWindows(shift.value, q);   // nearest prev/next work windows
 
-// Always show a WORK block (with real shift times) in the "Block window"
-let blockStartTs, blockEndTs, blockPhase;
-if (state.working) {
-  // use the current work block (day or night)
-  blockPhase = state.type; // 'day' | 'night'
-  ({ start: blockStartTs, end: blockEndTs } = workBounds(win.start, state.type));
-} else {
-  // not working: show the NEXT work block after the selected date
-  blockPhase = neighbors.nextPhase; // 'day' | 'night'
-  blockStartTs = neighbors.nextStart; // already 07:00 or 19:00
-  blockEndTs   = neighbors.nextEnd;   // already 19:00 or 07:00(+4d)
+    // --- Current work/off block with accurate timestamps ---
+    // Working → use workBounds(win.start, 'day'|'night')
+    // Off     → OFF block spans from prev work END to next work START
+    let blockStartTs, blockEndTs, blockPhase, blockLabel;
+    blockLabel = "Current work/off block";
+
+    if (state.working) {
+      blockPhase = state.type; // 'day' | 'night'
+      ({ start: blockStartTs, end: blockEndTs } = workBounds(win.start, state.type));
+    } else {
+      blockPhase = "off";
+      blockStartTs = neighbors.prevEnd;   // when last work ended (07:00 or 19:00)
+      blockEndTs   = neighbors.nextStart; // when next work begins (07:00 or 19:00)
+    }
+
+    // Off windows (keep your existing behavior):
+    // If working → around the current work block; if off → around the next work block
+    const offRefStart = state.working ? ymd(win.start) : ymd(neighbors.nextStart);
+    const around = offWindowsAroundWork(offRefStart);
+
+    resultDate.value = {
+      working: state.working,
+      shiftType: state.type ?? "off",
+      blockPhase,             // 'day' | 'night' | 'off' (useful for badges)
+      blockLabel,             // "Current work/off block"
+      queryDate: q,
+      blockStart: blockStartTs,
+      blockEnd: blockEndTs,
+      prevOffStart: around.prevOffStart, prevOffEnd: around.prevOffEnd,
+      nextOffStart: around.nextOffStart, nextOffEnd: around.nextOffEnd,
+      prevWorkStart: neighbors.prevStart, prevWorkEnd: neighbors.prevEnd,
+      nextWorkStart: neighbors.nextStart, nextWorkEnd: neighbors.nextEnd
+    };
+
+  } else {
+    // Month mode → list 4-day work blocks (DAY/NIGHT) that intersect the month
+    const [y, m] = monthInput.value.split("-").map(Number);
+    const blocks = listWorkBlocksForMonth(shift.value, y, m);
+    resultMonth.value = { blocks, year: y, month: m };
+  }
 }
 
-// Off windows should be relative to the shown WORK block
-const offRefStart = state.working ? ymd(win.start) : ymd(neighbors.nextStart);
-const around = offWindowsAroundWork(offRefStart);
-
-resultDate.value = {
-  working: state.working,
-  shiftType: state.type ?? 'off',
-  queryDate: q,
-  blockStart: blockStartTs,
-  blockEnd: blockEndTs,
-  prevOffStart: around.prevOffStart, prevOffEnd: around.prevOffEnd,
-  nextOffStart: around.nextOffStart, nextOffEnd: around.nextOffEnd,
-  prevWorkStart: neighbors.prevStart, prevWorkEnd: neighbors.prevEnd,
-  nextWorkStart: neighbors.nextStart, nextWorkEnd: neighbors.nextEnd
-};
-
-} else {
-  // Month mode → compute 4-day WORK blocks (DAY/NIGHT) that intersect this month
-  const [y, m] = monthInput.value.split("-").map(Number);
-  const blocks = listWorkBlocksForMonth(shift.value, y, m);
-  resultMonth.value = { blocks, year: y, month: m };
-}
-
-}
 
 /* ========= Calendar ========= */
 const monthLabel=computed(()=>{
