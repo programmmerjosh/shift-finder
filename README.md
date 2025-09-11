@@ -6,7 +6,12 @@ It supports **A, B, C, and D shifts**, alternating between **4 days ON
 (07:00--19:00)**, **4 days OFF**, **4 nights ON (19:00--07:00)**, and
 **4 days OFF**.
 
-------------------------------------------------------------------------
+---
+
+## 🌐 Live Demo
+Check it out here: [Shift Finder](https://programmmerjosh.github.io/shift-finder/)
+
+---
 
 ## Features
 
