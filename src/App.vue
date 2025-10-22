@@ -870,4 +870,43 @@ input[type="month"] {
     border-bottom: none;
   }
 }
+
+/* styles for search-by-month tooltip ~ desktop only */
+.month-input-row{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  position:relative;
+}
+
+.help-btn{
+  all:unset;
+  width:26px;height:26px; line-height:26px;
+  text-align:center; font-weight:700;
+  border-radius:999px; cursor:pointer;
+  background:var(--chip,#222836);
+  border:1px solid var(--border,#252c3b);
+  color:var(--muted,#8b93a7);
+  transition:box-shadow .12s ease, transform .06s ease, background-color .12s ease;
+}
+.help-btn:hover{ transform: translateY(-1px); }
+.help-btn:focus-visible{ box-shadow:0 0 0 3px var(--ring, rgba(90,168,255,.5)); }
+
+.help-tip{
+  position:absolute;
+  top:100%; left:0;
+  margin-top:8px; z-index:5;
+  max-width:360px;
+  background:var(--panel,#151923);
+  color:var(--text,#e8ebf2);
+  border:1px solid var(--border,#252c3b);
+  border-radius:8px; padding:10px 12px;
+  box-shadow:0 8px 28px rgba(0,0,0,.35);
+  font-size:12px; line-height:1.35;
+}
+
+/* only show help UI on devices with hover + fine pointer (desktop) */
+@media (hover: none), (pointer: coarse){
+  .help-btn, .help-tip { display:none !important; }
+}
 </style>
