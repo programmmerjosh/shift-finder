@@ -243,9 +243,14 @@ const BASE_STARTS = {
   D: new Date("2025-07-07T00:00:00"), // offset +12d
 };
 
+/* === PLANT DAY-BLOCK BASE (first day of a 4-day DAY block) ===
+   Set this to a date that you know started an AB (day) 4-day block.
+   Using the same base you used originally for "AB days" is perfect. */
+const PLANT_DAYBLOCK_BASE = new Date("2025-07-23T00:00:00"); // adjust if needed
+
 /* ========= State ========= */
 /* shifts for the tabs */
-const shifts = ["A","B","C","D","P1","P2"]; // P1=Primary-1, P2=Primary-2
+const shifts = ["A","B","C","D","P1","P2","JG","IS"]; // added JG / IS
 const shift = ref("A");
 const mode = ref("month");
 
@@ -261,6 +266,46 @@ let mq, mqHandler;
 const showMonthHelp = ref(false);
 
 /* ========= Helpers ========= */
+// 0..7 within the 8-day plant cadence (4 days DAY, 4 days NIGHT)
+function plant8Index(date){
+  const base = ymd(PLANT_DAYBLOCK_BASE);
+  const days = Math.floor((ymd(date) - base) / (1000*60*60*24));
+  return ((days % 8) + 8) % 8;
+}
+
+// DAY-block window that contains `date` (00:00 boundaries)
+function plantDayBlockWindow(date){
+  const idx8 = plant8Index(date);     // 0..7
+  const inDayBlock = idx8 < 4;        // true = it's one of the 4 DAY days, false = in NIGHT days
+  const start = addDays(ymd(date), -(idx8 % 4));  // Monday-ish for that 4-day window
+  return { start, inDayBlock };
+}
+
+// Is this 4-day DAY block an AB or a CD DAY block?
+// AB (DAY): indices 0..3 in the 8-day cycle
+// CD (DAY): the *next* DAY block (8 days later); to check a specific date's block,
+// just look at idx8<4 → AB DAY, otherwise you're not in a DAY block at all.
+function isABDayBlock(date){
+  return plant8Index(date) < 4;
+}
+
+// Returns the day index (0–15) in the 16-day repeating A–D cycle
+// starting from your hard-coded base anchor for A-shift DAY #1.
+function dayIndexFromBase(date) {
+  const base = BASE_STARTS["A"]; // the anchor you already use for A-shift start
+  const diffDays = Math.floor((ymd(date) - ymd(base)) / (1000 * 60 * 60 * 24));
+  const idx = ((diffDays % 16) + 16) % 16; // wrap around 0–15 even for negatives
+  return idx;
+}
+
+// Given any date, find which 4-day block it's in and whether it's an A/B or C/D block
+function blockWindowForDate(date) {
+  const idx = dayIndexFromBase(date); // 0–15
+  const blockStart = addDays(BASE_STARTS["A"], Math.floor(idx / 4) * 4);
+  const isAB = idx < 8; // first 8 days = A/B block, next 8 = C/D block
+  return { isAB, blockStart };
+}
+
 function toInputDate(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -409,22 +454,110 @@ function primaryNeighborWorkWindows(letter, date){
 }
 
 function workingState(letter, date){
-  return isPrimary(letter)
-    ? primaryWorkingState(letter, date)
-    : classicWorkingState(letter, date);
+  if (isPrimary(letter))  return primaryWorkingState(letter, date);
+  if (isManager(letter))  return managerWorkingState(letter, date);
+  return classicWorkingState(letter, date); // A–D
 }
 
 function currentPhaseWindow(letter, date){
-  return isPrimary(letter)
-    ? primaryCurrentPhaseWindow(letter, date)
-    : classicCurrentPhaseWindow(letter, date);
+  if (isPrimary(letter))  return primaryCurrentPhaseWindow(letter, date);
+  if (isManager(letter))  return managerCurrentPhaseWindow(letter, date);
+  return classicCurrentPhaseWindow(letter, date);
 }
 
 function neighborWorkWindows(letter, date){
-  return isPrimary(letter)
-    ? primaryNeighborWorkWindows(letter, date)
-    : classicNeighborWorkWindows(letter, date);
+  if (isPrimary(letter))  return primaryNeighborWorkWindows(letter, date);
+  if (isManager(letter))  return managerNeighborWorkWindows(letter, date);
+  return classicNeighborWorkWindows(letter, date);
 }
+
+/** ===============================
+ * MANAGER (JG / IS) LOGIC — 4 ON / 4 OFF, DAY ONLY
+ * =============================== */
+
+// Managers: JG and IS
+function isManager(letter) {
+  return letter === "JG" || letter === "IS";
+}
+
+// base date = Monday of a known AB DAY block start
+const MANAGER_BASE = new Date("2025-07-21T00:00:00"); // adjust if needed
+
+// Determine which 8-day manager cycle day we're in (0–7)
+function managerIndexFromBase(date) {
+  const days = Math.floor((ymd(date) - ymd(MANAGER_BASE)) / (1000 * 60 * 60 * 24));
+  return ((days % 8) + 8) % 8;
+}
+
+// Manager works on 4-day blocks that shift opposite to each other
+function managerWorksOnDate(letter, date) {
+  const idx = managerIndexFromBase(date);
+  // JG works days 0–3, IS works days 4–7
+  return letter === "JG" ? idx < 4 : idx >= 4;
+}
+
+// Full 4-day window for manager’s current ON block
+function managerCurrentPhaseWindow(letter, date) {
+  const idx = managerIndexFromBase(date);
+  const baseIdx = idx - (idx % 8);
+  const baseDate = addDays(ymd(MANAGER_BASE), Math.floor((ymd(date) - ymd(MANAGER_BASE)) / (1000 * 60 * 60 * 24 / 8)) * 8);
+  const offset = (letter === "JG") ? 0 : 4;
+
+  const start = addDays(baseDate, offset);
+  const end = addDays(start, 4);
+
+  const isWorking = managerWorksOnDate(letter, date);
+
+  if (isWorking) {
+    return {
+      phase: "day",
+      start: new Date(start.setHours(7, 0, 0, 0)),
+      endExclusive: new Date(end.setHours(19, 0, 0, 0)),
+    };
+  } else {
+    // OFF block (4 days after current ON)
+    const offStart = new Date(end.setHours(19, 0, 0, 0));
+    const offEnd = addDays(offStart, 4);
+    return {
+      phase: "off",
+      start: offStart,
+      endExclusive: offEnd,
+    };
+  }
+}
+
+// Short state helper (for calendar/day badge)
+function managerWorkingState(letter, date) {
+  const working = managerWorksOnDate(letter, date);
+  return working
+    ? { working: true, type: "day", phase: "day" }
+    : { working: false, type: null, phase: "off" };
+}
+
+// Nearest previous and next 4-day ON blocks
+function managerNeighborWorkWindows(letter, date) {
+  const idx = managerIndexFromBase(date);
+  const baseIdx = idx - (idx % 8);
+  const baseDate = addDays(ymd(MANAGER_BASE), Math.floor((ymd(date) - ymd(MANAGER_BASE)) / (1000 * 60 * 60 * 24 / 8)) * 8);
+  const offset = (letter === "JG") ? 0 : 4;
+
+  const start = addDays(baseDate, offset);
+  const end = addDays(start, 4);
+
+  const prevStart = addDays(start, -8);
+  const nextStart = addDays(start, 8);
+
+  return {
+    prevPhase: "day",
+    prevStart: new Date(prevStart.setHours(7, 0, 0, 0)),
+    prevEnd: new Date(addDays(prevStart, 4).setHours(19, 0, 0, 0)),
+    nextPhase: "day",
+    nextStart: new Date(nextStart.setHours(7, 0, 0, 0)),
+    nextEnd: new Date(addDays(nextStart, 4).setHours(19, 0, 0, 0)),
+  };
+}
+
+
 
 
 // 16-day cycle layout (per shift):
@@ -681,10 +814,53 @@ function buildCalendar(year, month, letter) {
 // Return all 4-day WORK blocks (DAY or NIGHT) for a given month, for a shift.
 // Each item: { phase: "day"|"night", start: Date, end: Date }
 function listWorkBlocksForMonth(letter, year, month){
+  const monthStart = new Date(year, month-1, 1);
+  const monthEndEx = new Date(year, month, 1);
+
+  // === Managers: 4-on / 4-off (day only, repeating every 8 days) ===
+if (isManager(letter)) {
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEndEx = new Date(year, month, 1);
+
+  // Align the cursor to the beginning of the 8-day cycle
+  let cursor = addDays(ymd(MANAGER_BASE), -16); // scan slightly before month start
+  const blocks = [];
+
+  while (cursor < addDays(monthEndEx, 16)) {
+    const idx = ((ymd(cursor) - ymd(MANAGER_BASE)) / (1000 * 60 * 60 * 24)) % 8;
+    const start = new Date(cursor);
+    if (letter === "JG") {
+      // JG works days 0-3
+      const workStart = addDays(start, 0);
+      const workEnd = addDays(workStart, 4);
+      if (workEnd > monthStart && workStart < monthEndEx) {
+        blocks.push({ phase: "day", start: workStart, end: workEnd });
+      }
+    } else {
+      // IS works days 4-7
+      const workStart = addDays(start, 4);
+      const workEnd = addDays(workStart, 4);
+      if (workEnd > monthStart && workStart < monthEndEx) {
+        blocks.push({ phase: "day", start: workStart, end: workEnd });
+      }
+    }
+    cursor = addDays(cursor, 8); // advance to next 8-day cycle
+  }
+
+  // Merge any that touch (defensive)
+  blocks.sort((a, b) => a.start - b.start);
+  const merged = [];
+  for (const b of blocks) {
+    if (!merged.length) { merged.push(b); continue; }
+    const last = merged[merged.length - 1];
+    if (+last.end === +b.start) last.end = b.end;
+    else merged.push(b);
+  }
+  return merged;
+}
+
   if (!isPrimary(letter)){
     // === existing A–D version (keep your current logic) ===
-    const monthStart = new Date(year, month-1, 1);
-    const monthEndEx = new Date(year, month, 1);
     const blocks = [];
     // Walk in 4-day windows across the month
     let cursor = addDays(phaseStartForDate(letter, monthStart), -12);
@@ -700,10 +876,6 @@ function listWorkBlocksForMonth(letter, year, month){
     blocks.sort((a,b)=>a.start-b.start);
     return blocks;
   }
-
-  // === Primary weekly version ===
-  const monthStart = new Date(year, month-1, 1);
-  const monthEndEx = new Date(year, month, 1);
 
   // Find the first Monday <= monthStart
   let monday = startOfWeekMonday(monthStart);
