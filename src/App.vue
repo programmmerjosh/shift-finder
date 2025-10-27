@@ -44,16 +44,19 @@
               <input
                 id="inputMonth"
                 type="month"
+                :placeholder="isFirefox ? 'YYYY-MM' : ''"
                 v-model="monthInput"
                 :title="
                   isDesktop
                     ? 'Tip: Click the field, then type the first letter of the month (e.g., “J” for January/June), or use ↑/↓ to move through months. You can use ↑/↓ to move to a different year OR key in the exact year you want.'
                     : ''
                 "
+                style="max-width: 200px"
               />
-              <!-- Help button: desktop only -->
+
+              <!-- Help button & tooltip: show on desktop, but NOT on Firefox -->
               <button
-                v-if="isDesktop"
+                v-if="isDesktop && !isFirefox"
                 class="help-btn"
                 type="button"
                 aria-label="How to use the month picker"
@@ -65,9 +68,8 @@
                 ?
               </button>
 
-              <!-- Tooltip -->
               <div
-                v-if="isDesktop && showMonthHelp"
+                v-if="isDesktop && !isFirefox && showMonthHelp"
                 class="help-tip"
                 role="tooltip"
               >
@@ -75,7 +77,8 @@
                 • Click the field, then type the first letter of a month (e.g.,
                 “J”).<br />
                 • Use ↑ / ↓ to move through months.<br />
-                • Use ↑/↓ to move to a different year OR key in the exact year<br />
+                • Use ↑/↓ to move to a different year OR key in the exact
+                year<br />
               </div>
             </div>
           </div>
@@ -213,7 +216,8 @@
         <div
           v-for="(b, i) in resultMonth.blocks"
           :key="i"
-          class="block" style="flex:1 1 100%"
+          class="block"
+          style="flex: 1 1 100%"
         >
           <span
             class="pill"
@@ -235,6 +239,9 @@ import DatePicker from "./components/DatePicker.vue";
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 
 /* ========= Configuration ========= */
+const isFirefox =
+  typeof navigator !== "undefined" && /firefox/i.test(navigator.userAgent);
+
 // Start of each shift's 16-day cycle (index 0 = Day ON start for that shift)
 const BASE_STARTS = {
   A: new Date("2025-07-03T00:00:00"), // Day ON: 4d → OFF 4d → Night ON 4d → OFF 4d
@@ -250,7 +257,7 @@ const PLANT_DAYBLOCK_BASE = new Date("2025-07-23T00:00:00"); // adjust if needed
 
 /* ========= State ========= */
 /* shifts for the tabs */
-const shifts = ["A","B","C","D","P1","P2","JG","IS"]; // added JG / IS
+const shifts = ["A", "B", "C", "D", "P1", "P2", "JG", "IS"]; // added JG / IS
 const shift = ref("A");
 const mode = ref("month");
 
@@ -267,17 +274,17 @@ const showMonthHelp = ref(false);
 
 /* ========= Helpers ========= */
 // 0..7 within the 8-day plant cadence (4 days DAY, 4 days NIGHT)
-function plant8Index(date){
+function plant8Index(date) {
   const base = ymd(PLANT_DAYBLOCK_BASE);
-  const days = Math.floor((ymd(date) - base) / (1000*60*60*24));
+  const days = Math.floor((ymd(date) - base) / (1000 * 60 * 60 * 24));
   return ((days % 8) + 8) % 8;
 }
 
 // DAY-block window that contains `date` (00:00 boundaries)
-function plantDayBlockWindow(date){
-  const idx8 = plant8Index(date);     // 0..7
-  const inDayBlock = idx8 < 4;        // true = it's one of the 4 DAY days, false = in NIGHT days
-  const start = addDays(ymd(date), -(idx8 % 4));  // Monday-ish for that 4-day window
+function plantDayBlockWindow(date) {
+  const idx8 = plant8Index(date); // 0..7
+  const inDayBlock = idx8 < 4; // true = it's one of the 4 DAY days, false = in NIGHT days
+  const start = addDays(ymd(date), -(idx8 % 4)); // Monday-ish for that 4-day window
   return { start, inDayBlock };
 }
 
@@ -285,7 +292,7 @@ function plantDayBlockWindow(date){
 // AB (DAY): indices 0..3 in the 8-day cycle
 // CD (DAY): the *next* DAY block (8 days later); to check a specific date's block,
 // just look at idx8<4 → AB DAY, otherwise you're not in a DAY block at all.
-function isABDayBlock(date){
+function isABDayBlock(date) {
   return plant8Index(date) < 4;
 }
 
@@ -353,18 +360,20 @@ function fmtYMD(d) {
   });
 }
 
-function isPrimary(letter){ return letter === "P1" || letter === "P2"; }
-function startOfWeekMonday(d){
+function isPrimary(letter) {
+  return letter === "P1" || letter === "P2";
+}
+function startOfWeekMonday(d) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   // getDay(): Sun=0..Sat=6 → convert to Mon=0..Sun=6
   let dow = x.getDay(); // 0..6
-  const monOffset = (dow === 0 ? -6 : (1 - dow)); // move to Monday
+  const monOffset = dow === 0 ? -6 : 1 - dow; // move to Monday
   x.setDate(x.getDate() + monOffset);
-  x.setHours(0,0,0,0);
+  x.setHours(0, 0, 0, 0);
   return x;
 }
-function weeksBetween(mondayA, mondayB){
-  return Math.floor((mondayA - mondayB) / (1000*60*60*24*7));
+function weeksBetween(mondayA, mondayB) {
+  return Math.floor((mondayA - mondayB) / (1000 * 60 * 60 * 24 * 7));
 }
 
 /* Primary schedules: anchor Monday for week-based rotation
@@ -374,7 +383,7 @@ const PRIMARY_ANCHOR_MON = new Date("2025-08-04T00:00:00");
 // Given a Monday anchor, which phase does this shift do THIS week?
 // P1: week 0 = DAY, week 1 = NIGHT, alternating
 // P2: inverse of P1 in the same week
-function primaryWeekPhase(letter, monday){
+function primaryWeekPhase(letter, monday) {
   const w = weeksBetween(monday, PRIMARY_ANCHOR_MON); // can be negative
   const even = ((w % 2) + 2) % 2 === 0;
   if (letter === "P1") return even ? "day" : "night";
@@ -382,92 +391,192 @@ function primaryWeekPhase(letter, monday){
 }
 
 // Is this calendar date a workday for Primary? (Mon–Thu only)
-function primaryWorkingState(letter, date){
+function primaryWorkingState(letter, date) {
   const monday = startOfWeekMonday(date);
   const dow = date.getDay(); // Sun=0..Sat=6
-  const isMonThu = (dow >= 1 && dow <= 4); // Mon..Thu
-  if (!isMonThu) return { working:false, type:null, phase:"off", idx:null };
+  const isMonThu = dow >= 1 && dow <= 4; // Mon..Thu
+  if (!isMonThu) return { working: false, type: null, phase: "off", idx: null };
   const t = primaryWeekPhase(letter, monday); // 'day' | 'night'
-  return { working:true, type:t, phase:t, idx:null };
+  return { working: true, type: t, phase: t, idx: null };
 }
 
 // Current 4-day phase window that contains `date` (Mon–Thu block or Fri–Mon OFF)
-function primaryCurrentPhaseWindow(letter, date){
+function primaryCurrentPhaseWindow(letter, date) {
   const monday = startOfWeekMonday(date);
   const dow = date.getDay(); // 0..6
-  const isMonThu = (dow >= 1 && dow <= 4);
+  const isMonThu = dow >= 1 && dow <= 4;
   const weekPhase = primaryWeekPhase(letter, monday);
 
   // Work window: Mon..Thu (4 calendar days), Off window: Fri..Sun (3 days)
   const workStart = new Date(monday); // Mon 00:00
-  const offStart  = new Date(monday); offStart.setDate(offStart.getDate()+4); // Fri 00:00
-  const offEnd    = new Date(monday); offEnd.setDate(offEnd.getDate()+7);     // next Mon 00:00
+  const offStart = new Date(monday);
+  offStart.setDate(offStart.getDate() + 4); // Fri 00:00
+  const offEnd = new Date(monday);
+  offEnd.setDate(offEnd.getDate() + 7); // next Mon 00:00
 
-  const dayStart = new Date(monday); dayStart.setHours(7,0,0,0);
-  const dayEnd   = new Date(monday); dayEnd.setDate(dayEnd.getDate()+3); dayEnd.setHours(19,0,0,0);
-  const nightStart = new Date(monday); nightStart.setHours(19,0,0,0);
-  const nightEnd   = new Date(monday); nightEnd.setDate(nightEnd.getDate()+4); nightEnd.setHours(7,0,0,0); // Fri 07:00
+  const dayStart = new Date(monday);
+  dayStart.setHours(7, 0, 0, 0);
+  const dayEnd = new Date(monday);
+  dayEnd.setDate(dayEnd.getDate() + 3);
+  dayEnd.setHours(19, 0, 0, 0);
+  const nightStart = new Date(monday);
+  nightStart.setHours(19, 0, 0, 0);
+  const nightEnd = new Date(monday);
+  nightEnd.setDate(nightEnd.getDate() + 4);
+  nightEnd.setHours(7, 0, 0, 0); // Fri 07:00
 
   return isMonThu
-    ? { phase: weekPhase, start: workStart, endExclusive: offStart, dayStart, dayEnd, nightStart, nightEnd }
-    : { phase: "off",     start: offStart,  endExclusive: offEnd,  dayStart, dayEnd, nightStart, nightEnd };
+    ? {
+        phase: weekPhase,
+        start: workStart,
+        endExclusive: offStart,
+        dayStart,
+        dayEnd,
+        nightStart,
+        nightEnd,
+      }
+    : {
+        phase: "off",
+        start: offStart,
+        endExclusive: offEnd,
+        dayStart,
+        dayEnd,
+        nightStart,
+        nightEnd,
+      };
 }
 
 // Nearest previous/next WORK windows around `date` (weekly cadence)
-function primaryNeighborWorkWindows(letter, date){
+function primaryNeighborWorkWindows(letter, date) {
   const monday = startOfWeekMonday(date);
   // If date is in Fri–Sun OFF window, "current" work is the Monday of THIS week if Mon–Thu,
   // else find prev/next Mondays by +/-7 days.
   // We'll just compute prev/next week Mondays and pick their phases.
-  const prevMon = new Date(monday); prevMon.setDate(prevMon.getDate()-7);
-  const nextMon = new Date(monday); nextMon.setDate(nextMon.getDate()+7);
+  const prevMon = new Date(monday);
+  prevMon.setDate(prevMon.getDate() - 7);
+  const nextMon = new Date(monday);
+  nextMon.setDate(nextMon.getDate() + 7);
 
   // Work windows always start on Monday of the work week
   const prevPhase = primaryWeekPhase(letter, prevMon); // 'day' | 'night'
   const nextPhase = primaryWeekPhase(letter, nextMon);
 
-  const prev = (prevPhase === "day")
-    ? { start: (()=>{ const s=new Date(prevMon); s.setHours(7,0,0,0); return s; })(),
-        end:   (()=>{ const e=new Date(prevMon); e.setDate(e.getDate()+3); e.setHours(19,0,0,0); return e; })() }
-    : { start: (()=>{ const s=new Date(prevMon); s.setHours(19,0,0,0); return s; })(),
-        end:   (()=>{ const e=new Date(prevMon); e.setDate(e.getDate()+4); e.setHours(7,0,0,0); return e; })() };
+  const prev =
+    prevPhase === "day"
+      ? {
+          start: (() => {
+            const s = new Date(prevMon);
+            s.setHours(7, 0, 0, 0);
+            return s;
+          })(),
+          end: (() => {
+            const e = new Date(prevMon);
+            e.setDate(e.getDate() + 3);
+            e.setHours(19, 0, 0, 0);
+            return e;
+          })(),
+        }
+      : {
+          start: (() => {
+            const s = new Date(prevMon);
+            s.setHours(19, 0, 0, 0);
+            return s;
+          })(),
+          end: (() => {
+            const e = new Date(prevMon);
+            e.setDate(e.getDate() + 4);
+            e.setHours(7, 0, 0, 0);
+            return e;
+          })(),
+        };
 
-  const next = (nextPhase === "day")
-    ? { start: (()=>{ const s=new Date(nextMon); s.setHours(7,0,0,0); return s; })(),
-        end:   (()=>{ const e=new Date(nextMon); e.setDate(e.getDate()+3); e.setHours(19,0,0,0); return e; })() }
-    : { start: (()=>{ const s=new Date(nextMon); s.setHours(19,0,0,0); return s; })(),
-        end:   (()=>{ const e=new Date(nextMon); e.setDate(e.getDate()+4); e.setHours(7,0,0,0); return e; })() };
+  const next =
+    nextPhase === "day"
+      ? {
+          start: (() => {
+            const s = new Date(nextMon);
+            s.setHours(7, 0, 0, 0);
+            return s;
+          })(),
+          end: (() => {
+            const e = new Date(nextMon);
+            e.setDate(e.getDate() + 3);
+            e.setHours(19, 0, 0, 0);
+            return e;
+          })(),
+        }
+      : {
+          start: (() => {
+            const s = new Date(nextMon);
+            s.setHours(19, 0, 0, 0);
+            return s;
+          })(),
+          end: (() => {
+            const e = new Date(nextMon);
+            e.setDate(e.getDate() + 4);
+            e.setHours(7, 0, 0, 0);
+            return e;
+          })(),
+        };
 
   // Also return the "current" week's work bounds (depends on whether this week is Mon–Thu or Fri–Sun)
   const thisWeekPhase = primaryWeekPhase(letter, monday);
-  const curr = (thisWeekPhase === "day")
-    ? { start: (()=>{ const s=new Date(monday); s.setHours(7,0,0,0); return s; })(),
-        end:   (()=>{ const e=new Date(monday); e.setDate(e.getDate()+3); e.setHours(19,0,0,0); return e; })() }
-    : { start: (()=>{ const s=new Date(monday); s.setHours(19,0,0,0); return s; })(),
-        end:   (()=>{ const e=new Date(monday); e.setDate(e.getDate()+4); e.setHours(7,0,0,0); return e; })() };
+  const curr =
+    thisWeekPhase === "day"
+      ? {
+          start: (() => {
+            const s = new Date(monday);
+            s.setHours(7, 0, 0, 0);
+            return s;
+          })(),
+          end: (() => {
+            const e = new Date(monday);
+            e.setDate(e.getDate() + 3);
+            e.setHours(19, 0, 0, 0);
+            return e;
+          })(),
+        }
+      : {
+          start: (() => {
+            const s = new Date(monday);
+            s.setHours(19, 0, 0, 0);
+            return s;
+          })(),
+          end: (() => {
+            const e = new Date(monday);
+            e.setDate(e.getDate() + 4);
+            e.setHours(7, 0, 0, 0);
+            return e;
+          })(),
+        };
 
   return {
-    prevPhase, prevStart: prev.start, prevEnd: prev.end,
-    nextPhase, nextStart: next.start, nextEnd: next.end,
-    currStart: curr.start, currEnd: curr.end
+    prevPhase,
+    prevStart: prev.start,
+    prevEnd: prev.end,
+    nextPhase,
+    nextStart: next.start,
+    nextEnd: next.end,
+    currStart: curr.start,
+    currEnd: curr.end,
   };
 }
 
-function workingState(letter, date){
-  if (isPrimary(letter))  return primaryWorkingState(letter, date);
-  if (isManager(letter))  return managerWorkingState(letter, date);
+function workingState(letter, date) {
+  if (isPrimary(letter)) return primaryWorkingState(letter, date);
+  if (isManager(letter)) return managerWorkingState(letter, date);
   return classicWorkingState(letter, date); // A–D
 }
 
-function currentPhaseWindow(letter, date){
-  if (isPrimary(letter))  return primaryCurrentPhaseWindow(letter, date);
-  if (isManager(letter))  return managerCurrentPhaseWindow(letter, date);
+function currentPhaseWindow(letter, date) {
+  if (isPrimary(letter)) return primaryCurrentPhaseWindow(letter, date);
+  if (isManager(letter)) return managerCurrentPhaseWindow(letter, date);
   return classicCurrentPhaseWindow(letter, date);
 }
 
-function neighborWorkWindows(letter, date){
-  if (isPrimary(letter))  return primaryNeighborWorkWindows(letter, date);
-  if (isManager(letter))  return managerNeighborWorkWindows(letter, date);
+function neighborWorkWindows(letter, date) {
+  if (isPrimary(letter)) return primaryNeighborWorkWindows(letter, date);
+  if (isManager(letter)) return managerNeighborWorkWindows(letter, date);
   return classicNeighborWorkWindows(letter, date);
 }
 
@@ -485,7 +594,9 @@ const MANAGER_BASE = new Date("2025-07-21T00:00:00"); // adjust if needed
 
 // Determine which 8-day manager cycle day we're in (0–7)
 function managerIndexFromBase(date) {
-  const days = Math.floor((ymd(date) - ymd(MANAGER_BASE)) / (1000 * 60 * 60 * 24));
+  const days = Math.floor(
+    (ymd(date) - ymd(MANAGER_BASE)) / (1000 * 60 * 60 * 24)
+  );
   return ((days % 8) + 8) % 8;
 }
 
@@ -500,8 +611,12 @@ function managerWorksOnDate(letter, date) {
 function managerCurrentPhaseWindow(letter, date) {
   const idx = managerIndexFromBase(date);
   const baseIdx = idx - (idx % 8);
-  const baseDate = addDays(ymd(MANAGER_BASE), Math.floor((ymd(date) - ymd(MANAGER_BASE)) / (1000 * 60 * 60 * 24 / 8)) * 8);
-  const offset = (letter === "JG") ? 0 : 4;
+  const baseDate = addDays(
+    ymd(MANAGER_BASE),
+    Math.floor((ymd(date) - ymd(MANAGER_BASE)) / ((1000 * 60 * 60 * 24) / 8)) *
+      8
+  );
+  const offset = letter === "JG" ? 0 : 4;
 
   const start = addDays(baseDate, offset);
   const end = addDays(start, 4);
@@ -538,8 +653,12 @@ function managerWorkingState(letter, date) {
 function managerNeighborWorkWindows(letter, date) {
   const idx = managerIndexFromBase(date);
   const baseIdx = idx - (idx % 8);
-  const baseDate = addDays(ymd(MANAGER_BASE), Math.floor((ymd(date) - ymd(MANAGER_BASE)) / (1000 * 60 * 60 * 24 / 8)) * 8);
-  const offset = (letter === "JG") ? 0 : 4;
+  const baseDate = addDays(
+    ymd(MANAGER_BASE),
+    Math.floor((ymd(date) - ymd(MANAGER_BASE)) / ((1000 * 60 * 60 * 24) / 8)) *
+      8
+  );
+  const offset = letter === "JG" ? 0 : 4;
 
   const start = addDays(baseDate, offset);
   const end = addDays(start, 4);
@@ -556,9 +675,6 @@ function managerNeighborWorkWindows(letter, date) {
     nextEnd: new Date(addDays(nextStart, 4).setHours(19, 0, 0, 0)),
   };
 }
-
-
-
 
 // 16-day cycle layout (per shift):
 // idx 0..3   : DAY ON (07:00–19:00)
@@ -689,23 +805,26 @@ function classicNeighborWorkWindows(shiftLetter, date) {
 }
 
 // For convenience in outputs: OFF windows adjacent to a WORK block
-function offWindowsAroundWork(letter, workStartDate){
-  if (isPrimary(letter)){
+function offWindowsAroundWork(letter, workStartDate) {
+  if (isPrimary(letter)) {
     // workStartDate should be the Monday (00:00) of the block
     const mon = startOfWeekMonday(workStartDate);
-    const prevOffStart = new Date(mon); prevOffStart.setDate(prevOffStart.getDate()-3); // Fri 00:00 of previous week
-    const prevOffEnd   = new Date(mon); // Mon 00:00
-    const nextOffStart = new Date(mon); nextOffStart.setDate(nextOffStart.getDate()+4); // Fri 00:00
-    const nextOffEnd   = new Date(mon); nextOffEnd.setDate(nextOffEnd.getDate()+7); // Next Mon 00:00
+    const prevOffStart = new Date(mon);
+    prevOffStart.setDate(prevOffStart.getDate() - 3); // Fri 00:00 of previous week
+    const prevOffEnd = new Date(mon); // Mon 00:00
+    const nextOffStart = new Date(mon);
+    nextOffStart.setDate(nextOffStart.getDate() + 4); // Fri 00:00
+    const nextOffEnd = new Date(mon);
+    nextOffEnd.setDate(nextOffEnd.getDate() + 7); // Next Mon 00:00
     return { prevOffStart, prevOffEnd, nextOffStart, nextOffEnd };
   } else {
     // classic 4-off
     const prevOffStart = addDays(workStartDate, 4);
-    const prevOffEnd   = addDays(workStartDate, 8);
+    const prevOffEnd = addDays(workStartDate, 8);
     const nextOffStart = addDays(workStartDate, 12);
-    const nextOffEnd   = addDays(workStartDate, 16);
+    const nextOffEnd = addDays(workStartDate, 16);
     // ^ This version assumes workStartDate aligns to the *cycle start*; if you used the old +/-4 semantics, keep them.
-    // If you prefer your previous behavior: 
+    // If you prefer your previous behavior:
     // const prevOffStart = addDays(workStartDate, -4), prevOffEnd = workStartDate;
     // const nextOffStart = addDays(workStartDate, 4),  nextOffEnd = addDays(workStartDate, 8);
     return { prevOffStart, prevOffEnd, nextOffStart, nextOffEnd };
@@ -720,9 +839,9 @@ function submit() {
 
     // Use the family-dispatching helpers you added:
     // workingState, currentPhaseWindow, neighborWorkWindows
-    const state     = workingState(shift.value, q);          // { working, type: 'day'|'night'|null, phase, ... }
-    const win       = currentPhaseWindow(shift.value, q);    // current 4-day (A–D) or week (P1/P2) phase window
-    const neighbors = neighborWorkWindows(shift.value, q);   // nearest prev/next WORK windows
+    const state = workingState(shift.value, q); // { working, type: 'day'|'night'|null, phase, ... }
+    const win = currentPhaseWindow(shift.value, q); // current 4-day (A–D) or week (P1/P2) phase window
+    const neighbors = neighborWorkWindows(shift.value, q); // nearest prev/next WORK windows
 
     // --- Show the block the selected date actually sits in ---
     // If working: show the work block (with real shift times)
@@ -730,11 +849,14 @@ function submit() {
     let blockStartTs, blockEndTs, blockPhase;
     if (state.working) {
       blockPhase = state.type; // 'day' | 'night'
-      ({ start: blockStartTs, end: blockEndTs } = workBounds(win.start, state.type));
+      ({ start: blockStartTs, end: blockEndTs } = workBounds(
+        win.start,
+        state.type
+      ));
     } else {
       blockPhase = "off";
-      blockStartTs = neighbors.prevEnd;   // when last work ended (07:00 or 19:00)
-      blockEndTs   = neighbors.nextStart; // when next work begins (07:00 or 19:00)
+      blockStartTs = neighbors.prevEnd; // when last work ended (07:00 or 19:00)
+      blockEndTs = neighbors.nextStart; // when next work begins (07:00 or 19:00)
     }
 
     // --- Off windows (before/after a WORK block) ---
@@ -742,7 +864,9 @@ function submit() {
     // For P1/P2: use the MONDAY of the relevant week as the "work start base".
     const workStartBase = isPrimary(shift.value)
       ? startOfWeekMonday(state.working ? win.start : neighbors.nextStart)
-      : (state.working ? ymd(win.start) : ymd(neighbors.nextStart));
+      : state.working
+      ? ymd(win.start)
+      : ymd(neighbors.nextStart);
 
     // NOTE: you updated this helper to accept (letter, workStartBase)
     const around = offWindowsAroundWork(shift.value, workStartBase);
@@ -750,17 +874,20 @@ function submit() {
     resultDate.value = {
       working: state.working,
       shiftType: state.type ?? "off",
-      blockPhase,                         // 'day' | 'night' | 'off' (used for pill color)
+      blockPhase, // 'day' | 'night' | 'off' (used for pill color)
       blockLabel: "Current work/off block",
       queryDate: q,
       blockStart: blockStartTs,
       blockEnd: blockEndTs,
-      prevOffStart: around.prevOffStart, prevOffEnd: around.prevOffEnd,
-      nextOffStart: around.nextOffStart, nextOffEnd: around.nextOffEnd,
-      prevWorkStart: neighbors.prevStart, prevWorkEnd: neighbors.prevEnd,
-      nextWorkStart: neighbors.nextStart, nextWorkEnd: neighbors.nextEnd
+      prevOffStart: around.prevOffStart,
+      prevOffEnd: around.prevOffEnd,
+      nextOffStart: around.nextOffStart,
+      nextOffEnd: around.nextOffEnd,
+      prevWorkStart: neighbors.prevStart,
+      prevWorkEnd: neighbors.prevEnd,
+      nextWorkStart: neighbors.nextStart,
+      nextWorkEnd: neighbors.nextEnd,
     };
-
   } else {
     // Month mode → list 4-day (A–D) or weekly (P1/P2) WORK blocks that intersect the month
     const [y, m] = monthInput.value.split("-").map(Number);
@@ -813,53 +940,57 @@ function buildCalendar(year, month, letter) {
 
 // Return all 4-day WORK blocks (DAY or NIGHT) for a given month, for a shift.
 // Each item: { phase: "day"|"night", start: Date, end: Date }
-function listWorkBlocksForMonth(letter, year, month){
-  const monthStart = new Date(year, month-1, 1);
-  const monthEndEx = new Date(year, month, 1);
-
-  // === Managers: 4-on / 4-off (day only, repeating every 8 days) ===
-if (isManager(letter)) {
+function listWorkBlocksForMonth(letter, year, month) {
   const monthStart = new Date(year, month - 1, 1);
   const monthEndEx = new Date(year, month, 1);
 
-  // Align the cursor to the beginning of the 8-day cycle
-  let cursor = addDays(ymd(MANAGER_BASE), -16); // scan slightly before month start
-  const blocks = [];
+  // === Managers: 4-on / 4-off (day only, repeating every 8 days) ===
+  if (isManager(letter)) {
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEndEx = new Date(year, month, 1);
 
-  while (cursor < addDays(monthEndEx, 16)) {
-    const idx = ((ymd(cursor) - ymd(MANAGER_BASE)) / (1000 * 60 * 60 * 24)) % 8;
-    const start = new Date(cursor);
-    if (letter === "JG") {
-      // JG works days 0-3
-      const workStart = addDays(start, 0);
-      const workEnd = addDays(workStart, 4);
-      if (workEnd > monthStart && workStart < monthEndEx) {
-        blocks.push({ phase: "day", start: workStart, end: workEnd });
+    // Align the cursor to the beginning of the 8-day cycle
+    let cursor = addDays(ymd(MANAGER_BASE), -16); // scan slightly before month start
+    const blocks = [];
+
+    while (cursor < addDays(monthEndEx, 16)) {
+      const idx =
+        ((ymd(cursor) - ymd(MANAGER_BASE)) / (1000 * 60 * 60 * 24)) % 8;
+      const start = new Date(cursor);
+      if (letter === "JG") {
+        // JG works days 0-3
+        const workStart = addDays(start, 0);
+        const workEnd = addDays(workStart, 4);
+        if (workEnd > monthStart && workStart < monthEndEx) {
+          blocks.push({ phase: "day", start: workStart, end: workEnd });
+        }
+      } else {
+        // IS works days 4-7
+        const workStart = addDays(start, 4);
+        const workEnd = addDays(workStart, 4);
+        if (workEnd > monthStart && workStart < monthEndEx) {
+          blocks.push({ phase: "day", start: workStart, end: workEnd });
+        }
       }
-    } else {
-      // IS works days 4-7
-      const workStart = addDays(start, 4);
-      const workEnd = addDays(workStart, 4);
-      if (workEnd > monthStart && workStart < monthEndEx) {
-        blocks.push({ phase: "day", start: workStart, end: workEnd });
-      }
+      cursor = addDays(cursor, 8); // advance to next 8-day cycle
     }
-    cursor = addDays(cursor, 8); // advance to next 8-day cycle
+
+    // Merge any that touch (defensive)
+    blocks.sort((a, b) => a.start - b.start);
+    const merged = [];
+    for (const b of blocks) {
+      if (!merged.length) {
+        merged.push(b);
+        continue;
+      }
+      const last = merged[merged.length - 1];
+      if (+last.end === +b.start) last.end = b.end;
+      else merged.push(b);
+    }
+    return merged;
   }
 
-  // Merge any that touch (defensive)
-  blocks.sort((a, b) => a.start - b.start);
-  const merged = [];
-  for (const b of blocks) {
-    if (!merged.length) { merged.push(b); continue; }
-    const last = merged[merged.length - 1];
-    if (+last.end === +b.start) last.end = b.end;
-    else merged.push(b);
-  }
-  return merged;
-}
-
-  if (!isPrimary(letter)){
+  if (!isPrimary(letter)) {
     // === existing A–D version (keep your current logic) ===
     const blocks = [];
     // Walk in 4-day windows across the month
@@ -869,11 +1000,12 @@ if (isManager(letter)) {
       const win = classicCurrentPhaseWindow(letter, cursor);
       if (st.working) {
         const { start, end } = workBounds(win.start, st.type); // 'day'|'night'
-        if (end > monthStart && start < monthEndEx) blocks.push({ phase: st.type, start, end });
+        if (end > monthStart && start < monthEndEx)
+          blocks.push({ phase: st.type, start, end });
       }
       cursor = addDays(cursor, 4);
     }
-    blocks.sort((a,b)=>a.start-b.start);
+    blocks.sort((a, b) => a.start - b.start);
     return blocks;
   }
 
@@ -883,27 +1015,55 @@ if (isManager(letter)) {
   monday = addDays(monday, -7);
 
   const blocks = [];
-  while (monday < addDays(monthEndEx, 7)){
+  while (monday < addDays(monthEndEx, 7)) {
     const phase = primaryWeekPhase(letter, monday); // 'day'|'night'
     // Work bounds for that week
-    const b = (phase === "day")
-      ? { start: (()=>{ const s=new Date(monday); s.setHours(7,0,0,0); return s; })(),
-          end:   (()=>{ const e=new Date(monday); e.setDate(e.getDate()+3); e.setHours(19,0,0,0); return e; })() }
-      : { start: (()=>{ const s=new Date(monday); s.setHours(19,0,0,0); return s; })(),
-          end:   (()=>{ const e=new Date(monday); e.setDate(e.getDate()+4); e.setHours(7,0,0,0); return e; })() };
-    if (b.end > monthStart && b.start < monthEndEx) blocks.push({ phase, start: b.start, end: b.end });
+    const b =
+      phase === "day"
+        ? {
+            start: (() => {
+              const s = new Date(monday);
+              s.setHours(7, 0, 0, 0);
+              return s;
+            })(),
+            end: (() => {
+              const e = new Date(monday);
+              e.setDate(e.getDate() + 3);
+              e.setHours(19, 0, 0, 0);
+              return e;
+            })(),
+          }
+        : {
+            start: (() => {
+              const s = new Date(monday);
+              s.setHours(19, 0, 0, 0);
+              return s;
+            })(),
+            end: (() => {
+              const e = new Date(monday);
+              e.setDate(e.getDate() + 4);
+              e.setHours(7, 0, 0, 0);
+              return e;
+            })(),
+          };
+    if (b.end > monthStart && b.start < monthEndEx)
+      blocks.push({ phase, start: b.start, end: b.end });
     monday = addDays(monday, 7);
   }
-  blocks.sort((a,b)=>a.start-b.start);
+  blocks.sort((a, b) => a.start - b.start);
   return blocks;
 }
 
 // run once on load
 // Recalculate results automatically on relevant UI changes
 // Auto-update whenever the user changes shift/mode/date/month
-watch([shift, mode, dateInput, monthInput], () => {
-  submit();
-}, { immediate: true });
+watch(
+  [shift, mode, dateInput, monthInput],
+  () => {
+    submit();
+  },
+  { immediate: true }
+);
 
 watch(mode, (m) => {
   if (m === "month") {
@@ -918,7 +1078,9 @@ watch(mode, (m) => {
 onMounted(() => {
   // true on desktops / trackpads (hover + fine pointer)
   mq = window.matchMedia("(hover: hover) and (pointer: fine)");
-  mqHandler = (e) => { isDesktop.value = e.matches; };
+  mqHandler = (e) => {
+    isDesktop.value = e.matches;
+  };
   isDesktop.value = mq.matches;
 
   if (mq.addEventListener) mq.addEventListener("change", mqHandler);
@@ -1178,41 +1340,57 @@ input[type="month"] {
 }
 
 /* styles for search-by-month tooltip ~ desktop only */
-.month-input-row{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  position:relative;
+.month-input-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
 }
 
-.help-btn{
-  all:unset;
-  width:26px;height:26px; line-height:26px;
-  text-align:center; font-weight:700;
-  border-radius:999px; cursor:pointer;
-  background:var(--chip,#222836);
-  border:1px solid var(--border,#252c3b);
-  color:var(--muted,#8b93a7);
-  transition:box-shadow .12s ease, transform .06s ease, background-color .12s ease;
+.help-btn {
+  all: unset;
+  width: 26px;
+  height: 26px;
+  line-height: 26px;
+  text-align: center;
+  font-weight: 700;
+  border-radius: 999px;
+  cursor: pointer;
+  background: var(--chip, #222836);
+  border: 1px solid var(--border, #252c3b);
+  color: var(--muted, #8b93a7);
+  transition: box-shadow 0.12s ease, transform 0.06s ease,
+    background-color 0.12s ease;
 }
-.help-btn:hover{ transform: translateY(-1px); }
-.help-btn:focus-visible{ box-shadow:0 0 0 3px var(--ring, rgba(90,168,255,.5)); }
+.help-btn:hover {
+  transform: translateY(-1px);
+}
+.help-btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring, rgba(90, 168, 255, 0.5));
+}
 
-.help-tip{
-  position:absolute;
-  top:100%; left:0;
-  margin-top:8px; z-index:5;
-  max-width:360px;
-  background:var(--panel,#151923);
-  color:var(--text,#e8ebf2);
-  border:1px solid var(--border,#252c3b);
-  border-radius:8px; padding:10px 12px;
-  box-shadow:0 8px 28px rgba(0,0,0,.35);
-  font-size:12px; line-height:1.35;
+.help-tip {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 8px;
+  z-index: 5;
+  max-width: 360px;
+  background: var(--panel, #151923);
+  color: var(--text, #e8ebf2);
+  border: 1px solid var(--border, #252c3b);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 /* only show help UI on devices with hover + fine pointer (desktop) */
-@media (hover: none), (pointer: coarse){
-  .help-btn, .help-tip { display:none !important; }
+@media (hover: none), (pointer: coarse) {
+  .help-btn,
+  .help-tip {
+    display: none !important;
+  }
 }
 </style>
