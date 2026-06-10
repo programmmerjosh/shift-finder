@@ -39,46 +39,35 @@
 
         <template v-else>
           <div>
-            <label for="inputMonth">Select month</label><br />
-            <div class="month-input-row">
-              <input
-                id="inputMonth"
-                type="month"
-                :placeholder="isFirefox ? 'YYYY-MM' : ''"
-                v-model="monthInput"
-                :title="
-                  isDesktop
-                    ? 'Tip: Click the field, then type the first letter of the month (e.g., “J” for January/June), or use ↑/↓ to move through months. You can use ↑/↓ to move to a different year OR key in the exact year you want.'
-                    : ''
-                "
-                style="max-width: 200px"
-              />
+            <div class="picker-group">
+              <label>Select month</label>
+              <div class="button-grid months">
+                <button
+                  v-for="m in monthButtons"
+                  :key="m.value"
+                  type="button"
+                  class="tab picker-btn"
+                  :class="{ active: selectedMonth === m.value }"
+                  @click="setMonth(m.value)"
+                >
+                  {{ m.label }}
+                </button>
+              </div>
+            </div>
 
-              <!-- Help button & tooltip: show on desktop, but NOT on Firefox -->
-              <button
-                v-if="isDesktop && !isFirefox"
-                class="help-btn"
-                type="button"
-                aria-label="How to use the month picker"
-                @mouseenter="showMonthHelp = true"
-                @mouseleave="showMonthHelp = false"
-                @focus="showMonthHelp = true"
-                @blur="showMonthHelp = false"
-              >
-                ?
-              </button>
-
-              <div
-                v-if="isDesktop && !isFirefox && showMonthHelp"
-                class="help-tip"
-                role="tooltip"
-              >
-                <strong>Month picker tips</strong><br />
-                • Click the field, then type the first letter of a month (e.g.,
-                “J”).<br />
-                • Use ↑ / ↓ to move through months.<br />
-                • Use ↑/↓ to move to a different year OR key in the exact
-                year<br />
+            <div class="picker-group">
+              <label>Select year</label>
+              <div class="button-grid years">
+                <button
+                  v-for="y in yearButtons"
+                  :key="y"
+                  type="button"
+                  class="tab picker-btn"
+                  :class="{ active: selectedYear === y }"
+                  @click="setYear(y)"
+                >
+                  {{ y }}
+                </button>
               </div>
             </div>
           </div>
@@ -94,15 +83,15 @@
       >
         <div>
           <div style="font-weight: 600">
-            Result for {{ shift }} on {{ fmtYMD(resultDate.queryDate) }}
+            Result for {{ shift }}-Shift on {{ fmtYMD(resultDate.queryDate) }}
           </div>
           <div class="muted">
             {{
               !resultDate.working
                 ? "OFF"
                 : resultDate.shiftType === "day"
-                ? "Day shift (07:00–19:00)"
-                : "Night shift (19:00–07:00)"
+                  ? "Day shift (07:00–19:00)"
+                  : "Night shift (19:00–07:00)"
             }}
           </div>
         </div>
@@ -120,57 +109,21 @@
               resultDate.blockPhase === 'day'
                 ? 'day'
                 : resultDate.blockPhase === 'night'
-                ? 'night'
-                : 'off'
+                  ? 'night'
+                  : 'off'
             "
             style="margin-right: 8px"
           >
             <template v-if="resultDate.blockPhase === 'day'"
-              >☀️ DAY WORK</template
+              >☀️ DAY SHIFT</template
             >
             <template v-else-if="resultDate.blockPhase === 'night'"
-              >🌙 NIGHT WORK</template
+              >🌙 NIGHT SHIFT</template
             >
             <template v-else>🛌 OFF</template>
           </span>
           {{ fmtFull(resultDate.blockStart) }} →
           {{ fmtFull(resultDate.blockEnd) }}
-        </div>
-
-        <div class="muted">You’re scheduled</div>
-        <div>
-          <template v-if="resultDate.working">
-            {{
-              resultDate.shiftType === "day"
-                ? "DAY (07:00–19:00)"
-                : "NIGHT (19:00–07:00)"
-            }}
-          </template>
-          <template v-else> Off on the selected date </template>
-        </div>
-
-        <div class="muted">Previous off</div>
-        <div>
-          {{ fmtDate(resultDate.prevOffStart) }} →
-          {{ fmtDate(resultDate.prevOffEnd) }}
-        </div>
-
-        <div class="muted">Next off</div>
-        <div>
-          {{ fmtDate(resultDate.nextOffStart) }} →
-          {{ fmtDate(resultDate.nextOffEnd) }}
-        </div>
-
-        <div class="muted">Nearest work blocks</div>
-        <div>
-          <div>
-            Previous: {{ fmtFull(resultDate.prevWorkStart) }} →
-            {{ fmtFull(resultDate.prevWorkEnd) }}
-          </div>
-          <div>
-            Next: {{ fmtFull(resultDate.nextWorkStart) }} →
-            {{ fmtFull(resultDate.nextWorkEnd) }}
-          </div>
         </div>
       </div>
     </div>
@@ -212,24 +165,7 @@
         </div>
       </div>
 
-      <div class="list">
-        <div
-          v-for="(b, i) in resultMonth.blocks"
-          :key="i"
-          class="block"
-          style="flex: 1 1 100%"
-        >
-          <span
-            class="pill"
-            :class="b.phase === 'day' ? 'day' : 'night'"
-            style="margin-right: 8px"
-          >
-            <template v-if="b.phase === 'day'">☀️ DAY</template>
-            <template v-else>🌙 NIGHT</template>
-          </span>
-          {{ fmtFull(b.start) }} → {{ fmtFull(b.end) }}
-        </div>
-      </div>
+      <div class=""></div>
     </div>
   </div>
 </template>
@@ -595,7 +531,7 @@ const MANAGER_BASE = new Date("2025-07-21T00:00:00"); // adjust if needed
 // Determine which 8-day manager cycle day we're in (0–7)
 function managerIndexFromBase(date) {
   const days = Math.floor(
-    (ymd(date) - ymd(MANAGER_BASE)) / (1000 * 60 * 60 * 24)
+    (ymd(date) - ymd(MANAGER_BASE)) / (1000 * 60 * 60 * 24),
   );
   return ((days % 8) + 8) % 8;
 }
@@ -614,7 +550,7 @@ function managerCurrentPhaseWindow(letter, date) {
   const baseDate = addDays(
     ymd(MANAGER_BASE),
     Math.floor((ymd(date) - ymd(MANAGER_BASE)) / ((1000 * 60 * 60 * 24) / 8)) *
-      8
+      8,
   );
   const offset = letter === "JG" ? 0 : 4;
 
@@ -656,7 +592,7 @@ function managerNeighborWorkWindows(letter, date) {
   const baseDate = addDays(
     ymd(MANAGER_BASE),
     Math.floor((ymd(date) - ymd(MANAGER_BASE)) / ((1000 * 60 * 60 * 24) / 8)) *
-      8
+      8,
   );
   const offset = letter === "JG" ? 0 : 4;
 
@@ -851,7 +787,7 @@ function submit() {
       blockPhase = state.type; // 'day' | 'night'
       ({ start: blockStartTs, end: blockEndTs } = workBounds(
         win.start,
-        state.type
+        state.type,
       ));
     } else {
       blockPhase = "off";
@@ -865,8 +801,8 @@ function submit() {
     const workStartBase = isPrimary(shift.value)
       ? startOfWeekMonday(state.working ? win.start : neighbors.nextStart)
       : state.working
-      ? ymd(win.start)
-      : ymd(neighbors.nextStart);
+        ? ymd(win.start)
+        : ymd(neighbors.nextStart);
 
     // NOTE: you updated this helper to accept (letter, workStartBase)
     const around = offWindowsAroundWork(shift.value, workStartBase);
@@ -875,7 +811,7 @@ function submit() {
       working: state.working,
       shiftType: state.type ?? "off",
       blockPhase, // 'day' | 'night' | 'off' (used for pill color)
-      blockLabel: "Current work/off block",
+      blockLabel: "Selected block",
       queryDate: q,
       blockStart: blockStartTs,
       blockEnd: blockEndTs,
@@ -910,7 +846,7 @@ const calendarCells = computed(() => {
   return buildCalendar(
     resultMonth.value.year,
     resultMonth.value.month,
-    shift.value
+    shift.value,
   );
 });
 
@@ -1054,6 +990,46 @@ function listWorkBlocksForMonth(letter, year, month) {
   return blocks;
 }
 
+// UPDATED month and year selection 
+const monthButtons = [
+  { label: "Jan", value: 1 },
+  { label: "Feb", value: 2 },
+  { label: "Mar", value: 3 },
+  { label: "Apr", value: 4 },
+  { label: "May", value: 5 },
+  { label: "Jun", value: 6 },
+  { label: "Jul", value: 7 },
+  { label: "Aug", value: 8 },
+  { label: "Sep", value: 9 },
+  { label: "Oct", value: 10 },
+  { label: "Nov", value: 11 },
+  { label: "Dec", value: 12 },
+];
+
+const currentYear = new Date().getFullYear();
+
+const yearButtons = computed(() => {
+  return Array.from({ length: 7 }, (_, i) => currentYear - 1 + i);
+});
+
+const selectedMonth = computed(() => {
+  return Number(monthInput.value.split("-")[1]);
+});
+
+const selectedYear = computed(() => {
+  return Number(monthInput.value.split("-")[0]);
+});
+
+function setMonth(month) {
+  const year = selectedYear.value || currentYear;
+  monthInput.value = `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function setYear(year) {
+  const month = selectedMonth.value || new Date().getMonth() + 1;
+  monthInput.value = `${year}-${String(month).padStart(2, "0")}`;
+}
+
 // run once on load
 // Recalculate results automatically on relevant UI changes
 // Auto-update whenever the user changes shift/mode/date/month
@@ -1062,7 +1038,7 @@ watch(
   () => {
     submit();
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(mode, (m) => {
@@ -1116,7 +1092,13 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Arial;
 }
 .container {
   max-width: 980px;
@@ -1359,7 +1341,9 @@ input[type="month"] {
   background: var(--chip, #222836);
   border: 1px solid var(--border, #252c3b);
   color: var(--muted, #8b93a7);
-  transition: box-shadow 0.12s ease, transform 0.06s ease,
+  transition:
+    box-shadow 0.12s ease,
+    transform 0.06s ease,
     background-color 0.12s ease;
 }
 .help-btn:hover {
@@ -1384,6 +1368,32 @@ input[type="month"] {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.picker-group {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.picker-group label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.button-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.picker-btn {
+  min-width: 72px;
+  text-align: center;
+  color: #ffffff;
+}
+
+.button-grid.years .picker-btn {
+  min-width: 86px;
 }
 
 /* only show help UI on devices with hover + fine pointer (desktop) */
